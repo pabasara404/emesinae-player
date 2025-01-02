@@ -12,6 +12,9 @@ const pauseButton = document.getElementById('pauseButton');
 const musicList = document.getElementById('musicList');
 const audioPlayer = document.getElementById('audioPlayer');
 const nowPlaying = document.getElementById('nowPlaying');
+const searchBar = document.getElementById('searchBar');
+const searchResults = document.getElementById('searchResults');
+const searchButton = document.getElementById('searchButton');
 
 // Additional UI for album art
 const albumArtContainer = document.createElement('div');
@@ -43,16 +46,78 @@ const loadMusicFromFolder = (folderPath) => {
     }
 };
 
+// Function to search and display all matching songs
+const displaySearchResults = (term) => {
+    const results = playlist.filter(track =>
+        track.name.toLowerCase().includes(term.toLowerCase())
+    );
+
+    searchResults.innerHTML = ''; // Clear previous results
+
+    if (results.length === 0) {
+        const noResultsItem = document.createElement('li');
+        noResultsItem.textContent = 'No matching songs found.';
+        searchResults.appendChild(noResultsItem);
+    } else {
+        results.forEach((track) => {
+            const resultItem = document.createElement('li');
+            resultItem.textContent = track.name;
+            resultItem.addEventListener('click', () => {
+                playTrack(originalPlaylist.findIndex(t => t.path === track.path));
+                searchResults.innerHTML = ''; // Clear results after selection
+            });
+            searchResults.appendChild(resultItem);
+        });
+    }
+};
+
+// Add click listener for the search button
+searchButton.addEventListener('click', () => {
+    const searchTerm = searchBar.value.trim();
+    displaySearchResults(searchTerm);
+});
+
+// Filter playlist based on the search term and display top 5 results
+const searchSongs = (term) => {
+    const results = playlist.filter(track =>
+        track.name.toLowerCase().includes(term.toLowerCase())
+    ).slice(0, 5); // Top 5 results
+
+    searchResults.innerHTML = ''; // Clear previous results
+
+    results.forEach((track, index) => {
+        const resultItem = document.createElement('li');
+        resultItem.textContent = track.name;
+        resultItem.addEventListener('click', () => {
+            playTrack(originalPlaylist.findIndex(t => t.path === track.path));
+            searchResults.innerHTML = ''; // Clear dropdown after selection
+        });
+        searchResults.appendChild(resultItem);
+    });
+
+    if (!term) {
+        searchResults.innerHTML = ''; // Clear dropdown if search is empty
+    }
+};
+
+// Attach input listener to the search bar
+searchBar.addEventListener('input', (e) => {
+    searchSongs(e.target.value);
+});
 // Function to check for common album art filenames in the folder
 const getAlbumArtPath = (folderPath) => {
-    const albumArtFiles = ['cover.jpg', 'cover.png', 'album.jpg', 'album.png'];
-    for (const artFile of albumArtFiles) {
-        const artPath = path.join(folderPath, artFile);
-        if (fs.existsSync(artPath)) {
-            return artPath;
+    try {
+        const albumArtFiles = ['cover.jpg', 'cover.png', 'album.jpg', 'album.png'];
+        for (const artFile of albumArtFiles) {
+            const artPath = path.join(folderPath, artFile);
+            if (fs.existsSync(artPath)) {
+                return artPath;
+            }
         }
+    } catch (error) {
+        console.error('Error processing album art:', error);
     }
-    return null; // Return null if no album art is found
+    return null; // Return null if no valid album art is found
 };
 
 // Display the playlist in the UI

@@ -7,6 +7,9 @@
 </head>
 <body>
 <h1>Emesinae Player</h1>
+<input type="text" id="searchBar" placeholder="Search for a song..." />
+<button id="searchButton">Search</button>
+<ul id="searchResults" class="dropdown"></ul>
 <div id="nowPlaying">Now Playing: None</div>
 <button id="selectFolder">Select Folder</button>
 <button id="previousButton">Previous</button>
@@ -14,8 +17,8 @@
 <button id="pauseButton">Pause</button>
 <button id="nextButton">Next</button>
 <button id="shuffleButton">Shuffle</button>
-<audio id="audioPlayer" controls></audio>
 <button id="repeatButton">Repeat Off</button>
+<audio id="audioPlayer" controls></audio>
 <ul id="musicList"></ul>
 
 <script src="renderer.js"></script>
