@@ -26,6 +26,7 @@ let playlist = [];         // Current working playlist (shuffled or original)
 let currentIndex = -1;     // Index of the currently playing track
 let shuffleEnabled = false; // Toggle state for shuffle
 let repeatEnabled = false;  // Toggle state for repeat
+let isPlaying = false;  // track playing state
 
 // Load music from a folder
 const loadMusicFromFolder = (folderPath) => {
@@ -35,16 +36,35 @@ const loadMusicFromFolder = (folderPath) => {
             ['.mp3', '.wav', '.ogg'].includes(path.extname(file).toLowerCase())
         );
 
+        // Clear existing playlist
+        originalPlaylist = [];
+
         audioFiles.forEach(file => {
             const filePath = path.join(folderPath, file);
+            const stats = fs.statSync(filePath);
             const albumArtPath = getAlbumArtPath(folderPath);
-            originalPlaylist.push({ name: file, path: filePath, albumArt: albumArtPath });
+
+            originalPlaylist.push({
+                name: file,
+                path: filePath,
+                albumArt: albumArtPath,
+                dateAdded: stats.birthtime || stats.mtime, // Use creation time or modification time as fallback
+                dateAddedTimestamp: (stats.birthtime || stats.mtime).getTime() // For sorting
+            });
         });
 
-        playlist = [...originalPlaylist]; // Set the working playlist to the original
+        // Sort the playlist by date added (newest first)
+        sortPlaylistByDate();
         displayPlaylist();
     }
 };
+
+// New function to sort playlist by date
+const sortPlaylistByDate = () => {
+    originalPlaylist.sort((a, b) => b.dateAddedTimestamp - a.dateAddedTimestamp);
+    playlist = [...originalPlaylist];
+};
+
 
 // Function to search and display all matching songs
 const displaySearchResults = (term) => {
@@ -125,7 +145,16 @@ const displayPlaylist = () => {
     musicList.innerHTML = '';
     playlist.forEach((track, index) => {
         const listItem = document.createElement('li');
-        listItem.textContent = track.name;
+        const dateStr = track.dateAdded.toLocaleDateString() + ' ' +
+            track.dateAdded.toLocaleTimeString();
+
+        // Create a container for better layout
+        listItem.innerHTML = `
+            <div class="track-info">
+                <span class="track-name">${track.name}</span>
+            </div>
+        `;
+
         listItem.addEventListener('click', () => {
             playTrack(index);
         });
@@ -139,26 +168,86 @@ const playTrack = (index) => {
         currentIndex = index;
         const track = playlist[currentIndex];
         audioPlayer.src = track.path;
-        audioPlayer.play();
-        nowPlaying.textContent = `Now Playing: ${track.name}`;
-        displayAlbumArt(track.albumArt); // Display album art if exists
+        audioPlayer.play()
+            .then(() => {
+                isPlaying = true;
+                playButton.textContent = "Pause";
+                nowPlaying.textContent = `Now Playing: ${track.name}`;
+                displayAlbumArt(track.albumArt);
+            })
+            .catch(error => {
+                console.error('Error playing track:', error);
+            });
     }
 };
 
-// Function to display album art
+
+// Handle track completion
+audioPlayer.addEventListener('ended', () => {
+    if (repeatEnabled) {
+        // If repeat is enabled, replay the current track
+        playTrack(currentIndex);
+    } else if (currentIndex < playlist.length - 1) {
+        // If there are more tracks, play the next one
+        playTrack(currentIndex + 1);
+    } else if (currentIndex === playlist.length - 1) {
+        // If it's the last track
+        if (shuffleEnabled) {
+            // If shuffle is enabled, reshuffle and start from beginning
+            toggleShuffle();
+            playTrack(0);
+        } else {
+            // Stop playing and reset
+            isPlaying = false;
+            playButton.textContent = "Play";
+            currentIndex = -1;
+            audioPlayer.src = '';
+            nowPlaying.textContent = 'Playlist finished';
+        }
+    }
+});
+// Play button functionality
+playButton.addEventListener('click', () => {
+    if (!isPlaying) {
+        if (currentIndex === -1 && playlist.length > 0) {
+            // Start playing from the beginning if no track is selected
+            playTrack(0);
+        } else if (audioPlayer.src) {
+            // Resume current track
+            audioPlayer.play();
+            isPlaying = true;
+            playButton.textContent = "Pause";
+        }
+    } else {
+        // Pause current track
+        audioPlayer.pause();
+        isPlaying = false;
+        playButton.textContent = "Play";
+    }
+});
+
+// Display album art with proper styling
 const displayAlbumArt = (artPath) => {
-    albumArtContainer.innerHTML = ''; // Clear previous album art
+    albumArtContainer.innerHTML = '';
     if (artPath) {
         const img = document.createElement('img');
         img.src = artPath;
         img.alt = 'Album Art';
-        img.style.width = '150px'; // Set width of the album art
-        img.style.height = '150px'; // Set height of the album art
+        img.style.width = '100%';
+        img.style.height = 'auto';
+        img.style.borderRadius = '12px';
         albumArtContainer.appendChild(img);
-    } else {
-        albumArtContainer.innerHTML = ''; // Clear if no album art
     }
 };
+
+// Modified pause button functionality
+pauseButton.addEventListener('click', () => {
+    if (audioPlayer.src) {
+        audioPlayer.pause();
+        isPlaying = false;
+        playButton.textContent = "Play";
+    }
+});
 
 // Play the next track
 const playNext = () => {
@@ -179,25 +268,25 @@ const playPrevious = () => {
 // Toggle shuffle mode
 const toggleShuffle = () => {
     if (shuffleEnabled) {
-        // Shuffle Off: Reset to original playlist
+        // Shuffle Off: Reset to original date-sorted playlist
         shuffleEnabled = false;
         shuffleButton.textContent = "Shuffle On";
-        playlist = [...originalPlaylist]; // Reset playlist to the original order
-        displayPlaylist(); // Update the UI
-        currentIndex = 0; // Reset to the first track
-        playTrack(currentIndex); // Play the first track
+        playlist = [...originalPlaylist]; // Reset to the date-sorted order
+        displayPlaylist();
+        currentIndex = 0;
+        playTrack(currentIndex);
     } else {
         // Shuffle On: Shuffle the playlist
         shuffleEnabled = true;
         shuffleButton.textContent = "Shuffle Off";
-        playlist = [...originalPlaylist]; // Copy the original playlist
+        playlist = [...originalPlaylist];
         for (let i = playlist.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [playlist[i], playlist[j]] = [playlist[j], playlist[i]];
         }
-        displayPlaylist(); // Update the UI
-        currentIndex = 0; // Reset to the first track
-        playTrack(currentIndex); // Play the first track
+        displayPlaylist();
+        currentIndex = 0;
+        playTrack(currentIndex);
     }
 };
 
@@ -247,3 +336,33 @@ ipcRenderer.on('load-folders', (event, folders) => {
         loadMusicFromFolder(folderPath);
     });
 });
+
+// const style = document.createElement('style');
+// style.textContent = `
+//     #musicList li {
+//         padding: 10px;
+//         border-bottom: 1px solid #eee;
+//         cursor: pointer;
+//     }
+//
+//     .track-info {
+//         display: flex;
+//         justify-content: space-between;
+//         align-items: center;
+//     }
+//
+//     .track-name {
+//         flex: 1;
+//         margin-right: 15px;
+//     }
+//
+//     .track-date {
+//         font-size: 0.85em;
+//         color: #666;
+//     }
+//
+//     #musicList li:hover {
+//         background-color: #f5f5f5;
+//     }
+// `;
+// document.head.appendChild(style);

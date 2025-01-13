@@ -31,6 +31,7 @@ app.on('ready', () => {
     mainWindow = new BrowserWindow({
         width: 800,
         height: 600,
+        icon: 'musical-note.ico',
         webPreferences: {
             preload: path.join(__dirname, 'renderer.js'),
             nodeIntegration: true,
